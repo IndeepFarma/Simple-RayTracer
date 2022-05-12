@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>2D Drawing</title>
+</head>
+
+<body>
+    <input type="file" onchange="readFile(this)">
+    <canvas class="myCanvas" width="1024" height="768"></canvas>
+    <script>
+        const canvas = document.querySelector('.myCanvas');
+
+        // Declaring Variables
+
+        // Array keeping track of spheres
+        let spheresArr = [
+            []
+        ];
+
+        // Light vars
+        let xL, yL, zL;
+        let lar, lag, lab;
+        let lpr, lpg, lpb;
+
+        // let shiny;
+        let numSpheres;
+
+        // Origin Points
+        let xO, yO, zO;
+        xO = 0;
+        yO = 0;
+        zO = 0;
+
+        function readFile(input) {
+            let file = input.files[0];
+            let reader = new FileReader();
+            reader.readAsText(file);
+
+            reader.onload = function() {
+                // split text file input into multiple lines (strings)
+                const lines = reader.result.split('\n');
+
+                // retrieve variables from the file
+                let data = lines[0].trim().split(/\s+/);
+
+                // Light Data
+                xL = parseFloat(data[1]);
+                yL = parseFloat(data[2]);
+                zL = parseFloat(data[3]);
+                lar = parseFloat(data[4]);
+                lag = parseFloat(data[5]);
+                lab = parseFloat(data[6]);
+                lpr = parseFloat(data[7]);
+                lpg = parseFloat(data[8]);
+                lpb = parseFloat(data[9]);
+
+                // Num of Spheres
+                data = lines[1].trim().split(/\s+/);
+                numSpheres = data[0];
+
+                // Retrieving Sphere data
+                // for (let i = 2; i < 2 + (numSpheres - 1); i++) {
+                let done = false;
+                let iter = 2;
+                let p = 0;
+
+                do {
+                    let data = lines[iter].trim().split(/\s+/);
+                    let sphere = [];
+                    sphere.push(parseFloat(data[1])); // xC = 0
+                    sphere.push(parseFloat(data[2])); // yC = 1
+                    sphere.push(parseFloat(data[3])); // zC = 2
+                    sphere.push(parseFloat(data[4])); // radius = 3
+                    sphere.push(parseFloat(data[5])); // ar = 4
+                    sphere.push(parseFloat(data[6])); // ag = 5
+                    sphere.push(parseFloat(data[7])); // ab = 6
+                    sphere.push(parseFloat(data[8])); // dr = 7
+                    sphere.push(parseFloat(data[9])); // dg = 8
+                    sphere.push(parseFloat(data[10])); // db = 9
+                    sphere.push(parseFloat(data[11])); // sr = 10
+                    sphere.push(parseFloat(data[12])); // sg = 11
+                    sphere.push(parseFloat(data[13])); // sb = 12
+                    sphere.push(parseFloat(data[14])); // shiny = 13
+                    iter++;
+                    p++;
+                    spheresArr.push(sphere);
+                } while (p < numSpheres);
+
+                // Set size of 2D Image
+                const width = 512;
+                const height = 512;
+                const ctx = canvas.getContext('2d');
+
+                // set background to black
+                ctx.fillStyle = 'rgb(0, 0, 0)';
+                ctx.fillRect(0, 0, width, height);
+
+
+                for (let k = 0; k < spheresArr.length; k++) {
+                    let s = spheresArr[k];
+                    for (let i = 0; i < height; i++) {
+                        for (let j = 0; j < width; j++) {
+
+                            // Calc direction vector
+                            let xD, yD, zD;
+
+                            xD = ((j / width) * 2) - 1;
+                            yD = 1 - (2 * (i / height));
+                            zD = -1;
+
+                            // Normalize the direction vector
+                            let magnitude = Math.sqrt(((Math.pow(xD, 2)) + (Math.pow(yD, 2)) + (Math.pow(zD, 2))), 2);
+                            xD = xD / magnitude;
+                            yD = yD / magnitude;
+                            zD = zD / magnitude;
+
+                            // Step 1: Calculate A, B, C values;
+                            let A, B, C;
+                            A = 1;
+                            B = calcB(xD, yD, zD, s[0], s[1], s[2]);
+                            C = calcC(s[0], s[1], s[2], s[3]);
+
+                            // Step 2: Use discriminant to figure out if there is an intersection
+                            let dis = calcDiscrim(A, B, C);
+
+                            // If 0 intersections then ray misses sphere and we can make background black
+                            if (dis < 0) {
+                                ctx.fillStyle = `rgb(0,0,0)`;
+                                continue;
+                            }
+
+                            // Step 3: Calculate the intersection points
+                            let intersectPoints = calcIntersections(dis, xD, yD, zD, A, B, C);
+
+                            // Step 4: Calculate which intersection point is closest if 2 points by using Pythagorus Theorem
+                            let closestPoints = [];
+
+                            if (intersectPoints.length > 3) {
+                                closestPoints = calcSmallestDist(intersectPoints);
+                            } else {
+                                closestPoints.push(intersectPoints[0]);
+                                closestPoints.push(intersectPoints[1]);
+                                closestPoints.push(intersectPoints[2]);
+                            }
+
+                            // Step 5: Calculate the Normal Vector
+                            let normals = calcNormals(closestPoints, s[0], s[1], s[2], s[3]);
+
+                            // Step 6: Make sure normals are unit vectors
+                            normals = normalizeVector(normals);
+
+                            // Step 7: Calculate the Viewing Vector
+                            let viewingVector = calcViewingVector(closestPoints);
+
+                            // Step 8: Make sure Viewing Vector is unit vector
+                            viewingVector = normalizeVector(viewingVector);
+
+                            // Step 9: Calculate the Light Vector
+                            let lightVector = calcLightVector(closestPoints);
+
+                            // Step 10: Make sure light vectors are Unit vectors
+                            lightVector = normalizeVector(lightVector);
+
+                            // Step 11: Calculate dot product of N and L
+                            let nL = calcDotProd(normals, lightVector);
+
+                            // Step 12: Calculate the reflection vector
+                            let reflectionVector = calcReflectionVector(normals, lightVector, nL);
+
+                            // Step 13: Normalize reflection vector
+                            reflectionVector = normalizeVector(reflectionVector);
+
+                            // Step 14: Calculate dot product of Reflection and Viewing Vector
+                            let rV = calcDotProd(reflectionVector, viewingVector);
+                            if (rV < 0) {
+                                rV = 0;
+                            }
+
+                            // Step 15: Illumination Equation
+                            let illumination = calcIllumination(nL, rV, s[4], s[5], s[6], s[7], s[8], s[9], s[10], s[11], s[12]);
+                            // calcIllumination(nL, rV, ar, ag, ab, dr, dg, db, sr, sg, sb)
+
+                            ctx.fillStyle = 'rgb(' + illumination[0] * 255 + ',' + illumination[1] * 255 + ',' + illumination[2] * 255 + ')';
+
+                            // draw 1x1 point using the selected colour
+                            // at point (j,i) on the screen
+                            ctx.fillRect(j, i, 1, 1);
+                        }
+                    }
+                }
+            }
+        }
+
+        function calcB(xD, yD, zD, xC, yC, zC) {
+            // B = 2 * ( xd * (x0 - xc)  + yd * (y0 - yc)  +  zd * (z0 - zc) )
+            let B = 2 * ((xD * (xO - xC)) +
+                (yD * (yO - yC)) +
+                (zD * (zO - zC)));
+
+            return B;
+        }
+
+        function calcC(xC, yC, zC, radius) {
+            // C = (x0 - xc)^2  + (y0 - yc)^2   + (z0 - zc)^2  - (Sr)^2
+            let a = Math.pow((xO - xC), 2);
+            let b = Math.pow((yO - yC), 2);
+            let c = Math.pow((zO - zC), 2);
+            let d = Math.pow(radius, 2);
+
+            let calculation = a + b + c - d;
+
+            return calculation;
+        }
+
+        function calcDiscrim(A, B, C) {
+            // dis = B^2 - 4 * A * C
+            let dis = (Math.pow(B, 2)) - (4 * A * C);
+            return dis;
+        }
+
+        function calcIntersections(dis, xD, yD, zD, A, B, C) {
+            /*  t0 = (-B - sqrt(dis) ) / 2A
+                t1 = (-B + sqrt(dis) ) / 2A 
+                ri0 = ( (x0 + xd*t0)    (y0 + yd*t0)    (z0 + zd*t0) )
+                ri1 = ( (x0 + xd*t1)    (y0 + yd*t1)    (z0 + zd*t1) )*/
+
+            let t0 = ((B * -1) - (Math.sqrt(dis))) / 2;
+            let t1 = ((B * -1) + (Math.sqrt(dis))) / 2;
+
+            let retArr = [];
+
+            if (dis == 0) {
+                let xi = (xO + (xD * t0));
+                let yi = (yO + (yD * t0));
+                let zi = (zO + (zD * t0));
+
+                retArr.push(xi);
+                retArr.push(yi);
+                retArr.push(zi);
+            } else if (dis > 0) {
+                let xi0 = (xO + (xD * t0));
+                let yi0 = (yO + (yD * t0));
+                let zi0 = (zO + (zD * t0));
+
+                retArr.push(xi0);
+                retArr.push(yi0);
+                retArr.push(zi0);
+
+                let xi1 = (xO + (xD * t1));
+                let yi1 = (yO + (yD * t1));
+                let zi1 = (zO + (zD * t1));
+
+                retArr.push(xi1);
+                retArr.push(yi1);
+                retArr.push(zi1);
+            }
+
+            return retArr;
+        }
+
+        function calcSmallestDist(points) {
+            // d = ((x2 - x1^)2 + (y2 - y1)^2 + (z2 - z1)^2)^1/2
+            let arrOne = [];
+            let arrTwo = [];
+            let d1;
+            let d2;
+            let a;
+            let b;
+
+            // Fill the arrays
+            for (let i = 0; i < 3; i++) {
+                arrOne.push(points[i]);
+            }
+
+            for (let i = 3; i < 6; i++) {
+                arrTwo.push(points[i]);
+            }
+
+            a = (Math.pow((0 - arrOne[0]), 2)) + (Math.pow((0 - arrOne[1]), 2)) + (Math.pow((0 - arrOne[2]), 2));
+            b = (Math.pow((0 - arrTwo[0]), 2)) + (Math.pow((0 - arrTwo[1]), 2)) + (Math.pow((0 - arrTwo[2]), 2));
+
+            // Calculate the distance
+            d1 = Math.pow(a, 0.5);
+            d2 = Math.pow(b, 0.5);
+
+            if (d1 < d2) {
+                return arrOne;
+            } else {
+                return arrTwo;
+            }
+        }
+
+        // Calculate the normals
+        function calcNormals(points, xC, yC, zC, radius) {
+            //  N = (nx ny nz)  =  ( (xi - xc)/Sr    (yi - yc)/Sr    (zi - zc)/Sr  )
+            let retArr = [];
+            let nX = (points[0] - xC) / radius;
+            let nY = (points[1] - yC) / radius;
+            let nZ = (points[2] - zC) / radius;
+
+            retArr.push(nX);
+            retArr.push(nY);
+            retArr.push(nZ);
+
+            return retArr;
+        }
+
+        // Turn vectors to unit vectors
+        function normalizeVector(points) {
+            // len = sqrt( x^2 + y^2 + z^2)
+            // A equals (x/len  y/len  z/len)
+
+            let retArr = [];
+            let a = Math.pow(points[0], 2);
+            let b = Math.pow(points[1], 2);
+            let c = Math.pow(points[2], 2);
+
+            let len = Math.sqrt((a + b + c));
+
+            retArr.push(points[0] / len);
+            retArr.push(points[1] / len);
+            retArr.push(points[2] / len);
+
+            return retArr;
+        }
+
+        function calcViewingVector(points) {
+            /*  V = ro - ri
+                = (vx vy vz)
+                = (x0-xi  y0-yi  z0-zi)*/
+            let retArr = [];
+            let vX = xO - points[0];
+            let vY = yO - points[1];
+            let vZ = zO - points[2];
+
+            retArr.push(vX);
+            retArr.push(vY);
+            retArr.push(vZ);
+
+            return retArr;
+        }
+
+        function calcLightVector(points) {
+            /*   L = l0 - ri
+                 = (lvx  lvy  lvz)
+                = (lx-xi  ly-yi  lz-zi) */
+
+            let retArr = [];
+            let lvX = xL - points[0];
+            let lvY = yL - points[1];
+            let lvZ = zL - points[2];
+
+            retArr.push(lvX);
+            retArr.push(lvY);
+            retArr.push(lvZ);
+
+            return retArr;
+        }
+
+        function calcDotProd(a, b) {
+            let prod = (a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2]);
+            return prod;
+        }
+
+        function calcReflectionVector(N, L, nL) {
+            /*  R = 2 * (N.L) * N - L
+                = (rx ry rz) */
+            let retArr = [];
+            let a = (2 * nL * N[0]) - L[0];
+            let b = (2 * nL * N[1]) - L[1];
+            let c = (2 * nL * N[2]) - L[2];
+
+            retArr.push(a);
+            retArr.push(b);
+            retArr.push(c);
+
+            return retArr;
+        }
+
+        function calcIllumination(nL, rV, ar, ag, ab, dr, dg, db, sr, sg, sb) {
+            /*   I =  ambient + diffuse  + specular
+                ambient = la[rgb] * a[rgb]
+                diffuse = lp[rgb] * d[rgb] * (N.L)
+                specular = lp[rgb] * s[rgb] * (R.V)^n */
+
+            let retArr = [];
+            let ambient = [];
+            let diffuse = [];
+            let specular = [];
+
+            ambient.push(lar * ar);
+            ambient.push(lag * ag);
+            ambient.push(lab * ab);
+
+            diffuse.push(lpr * dr * nL);
+            diffuse.push(lpg * dg * nL);
+            diffuse.push(lpb * db * nL);
+
+            specular.push(lpr * sr * Math.pow(rV, 128));
+            specular.push(lpg * sg * Math.pow(rV, 128));
+            specular.push(lpb * sb * Math.pow(rV, 128));
+
+            retArr.push(ambient[0] + diffuse[0] + specular[0]);
+            retArr.push(ambient[1] + diffuse[1] + specular[1]);
+            retArr.push(ambient[2] + diffuse[2] + specular[2]);
+
+            return retArr;
+
+        }
+    </script>
+</body>
+
+</html>
