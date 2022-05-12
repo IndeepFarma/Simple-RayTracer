@@ -1,4 +1,4 @@
-#Simple Ray Tracer
+Simple Ray Tracer
 
 I have included the sample A4 input given as well as another sample input file to show multiple spheres working.
 
