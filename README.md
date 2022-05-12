@@ -1,11 +1,4 @@
-Indeep Farma
-1015266
-CIS 4800 Graphics
-A4
-
-All functionality except for shadows and reflection is working.
-When displaying the files make sure to refresh page (COMMAND + SHIFT + R on Mac or CTRL + SHIFT + R on Windows)
-    otherwise, previous sphere may still be there.
+#Simple Ray Tracer
 
 I have included the sample A4 input given as well as another sample input file to show multiple spheres working.
 
